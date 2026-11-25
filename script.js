@@ -746,8 +746,13 @@ async function sendViaEmail() {
   answerRows().forEach(([q, a]) => { params[q] = a; });
   const j = await postForm(`https://formsubmit.co/ajax/${CONFIG.email}`, params);
   // сервис отвечает 200 ОК даже когда письма не будет — например, если сайт открыт
-  // как файл (двойным кликом), а не по ссылке. Поэтому смотрим на success в ответе
-  return !!j && String(j.success) === 'true';
+  // как файл (двойным кликом), а не по ссылке. Поэтому смотрим на success в ответе.
+  // 'activation' — сайт ещё не подтверждён: сервис прислал тебе письмо с кнопкой
+  // «Activate Form». Каждый новый запрос гасит кнопку в предыдущем письме,
+  // поэтому в этом случае повторять нельзя
+  if (j && String(j.success) === 'true') return 'sent';
+  if (j && /activation/i.test(String(j.message))) return 'activation';
+  return 'failed';
 }
 /* Личка тебе в Telegram через бота */
 async function sendViaBot(text) {
@@ -766,7 +771,7 @@ async function sendAnswer() {
   try {
     for (let i = 0; i < 3; i++) {
       if (CONFIG.botToken && CONFIG.chatId && await sendViaBot(text)) return;
-      if (CONFIG.email && await sendViaEmail()) return;
+      if (CONFIG.email && (await sendViaEmail()) !== 'failed') return;
       await sleep(3000);
     }
   } finally {
